@@ -701,20 +701,22 @@ void Fuzzer::MutateAndTestOne() {
     assert(NewSize > 0 && "Mutator returned empty unit");
     assert(NewSize <= CurrentMaxMutationLen && "Mutator return oversized unit");
     Size = NewSize;
-    II.NumExecutedMutations++;
-    Corpus.IncrementNumExecutedMutations();
+    if (Options.MutateDepth <= i+1) {
+      II.NumExecutedMutations++;
+      Corpus.IncrementNumExecutedMutations();
 
-    bool FoundUniqFeatures = false;
-    bool NewCov = RunOne(CurrentUnitData, Size, /*MayDeleteFile=*/true, &II,
-                         /*ForceAddToCorpus*/ false, &FoundUniqFeatures);
-    TryDetectingAMemoryLeak(CurrentUnitData, Size,
-                            /*DuringInitialCorpusExecution*/ false);
-    if (NewCov) {
-      ReportNewCoverage(&II, {CurrentUnitData, CurrentUnitData + Size});
-      break;  // We will mutate this input more in the next rounds.
+      bool FoundUniqFeatures = false;
+      bool NewCov = RunOne(CurrentUnitData, Size, /*MayDeleteFile=*/true, &II,
+                          /*ForceAddToCorpus*/ false, &FoundUniqFeatures);
+      TryDetectingAMemoryLeak(CurrentUnitData, Size,
+                              /*DuringInitialCorpusExecution*/ false);
+      if (NewCov) {
+        ReportNewCoverage(&II, {CurrentUnitData, CurrentUnitData + Size});
+        break;  // We will mutate this input more in the next rounds.
+      }
+      if (Options.ReduceDepth && !FoundUniqFeatures)
+        break;
     }
-    if (Options.ReduceDepth && !FoundUniqFeatures)
-      break;
   }
 
   II.NeedsEnergyUpdate = true;
