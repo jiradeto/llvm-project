@@ -685,7 +685,8 @@ void Fuzzer::MutateAndTestOne() {
       Min(MaxMutationLen, Max(U.size(), TmpMaxMutationLen));
   assert(CurrentMaxMutationLen > 0);
 
-  for (int i = 0; i < Options.MutateDepth; i++) {
+  int maxMutationIterations = (1 << (1 + (MD.GetRand().Rand() % Options.MutateDepth)));
+  for (int i = 0; i < maxMutationIterations; i++) {
     if (TotalNumberOfRuns >= Options.MaxNumberOfRuns)
       break;
     MaybeExitGracefully();
@@ -701,20 +702,24 @@ void Fuzzer::MutateAndTestOne() {
     assert(NewSize > 0 && "Mutator returned empty unit");
     assert(NewSize <= CurrentMaxMutationLen && "Mutator return oversized unit");
     Size = NewSize;
-    II.NumExecutedMutations++;
-    Corpus.IncrementNumExecutedMutations();
+    // only run the final mutated input
+    if (maxMutationIterations <= i+1) {
 
-    bool FoundUniqFeatures = false;
-    bool NewCov = RunOne(CurrentUnitData, Size, /*MayDeleteFile=*/true, &II,
-                         /*ForceAddToCorpus*/ false, &FoundUniqFeatures);
-    TryDetectingAMemoryLeak(CurrentUnitData, Size,
-                            /*DuringInitialCorpusExecution*/ false);
-    if (NewCov) {
-      ReportNewCoverage(&II, {CurrentUnitData, CurrentUnitData + Size});
-      break;  // We will mutate this input more in the next rounds.
+      II.NumExecutedMutations++;
+      Corpus.IncrementNumExecutedMutations();
+
+      bool FoundUniqFeatures = false;
+      bool NewCov = RunOne(CurrentUnitData, Size, /*MayDeleteFile=*/true, &II,
+                          /*ForceAddToCorpus*/ false, &FoundUniqFeatures);
+      TryDetectingAMemoryLeak(CurrentUnitData, Size,
+                              /*DuringInitialCorpusExecution*/ false);
+      if (NewCov) {
+        ReportNewCoverage(&II, {CurrentUnitData, CurrentUnitData + Size});
+        break;  // We will mutate this input more in the next rounds.
+      }
+      if (Options.ReduceDepth && !FoundUniqFeatures)
+        break;
     }
-    if (Options.ReduceDepth && !FoundUniqFeatures)
-      break;
   }
 
   II.NeedsEnergyUpdate = true;
@@ -858,7 +863,7 @@ void Fuzzer::MinimizeCrashLoop(const Unit &U) {
   while (!TimedOut() && TotalNumberOfRuns < Options.MaxNumberOfRuns) {
     MD.StartMutationSequence();
     memcpy(CurrentUnitData, U.data(), U.size());
-    for (int i = 0; i < Options.MutateDepth; i++) {
+    for (int i = 0; i < (1 << (1 + (MD.GetRand().Rand() % Options.MutateDepth))); i++) {
       size_t NewSize = MD.Mutate(CurrentUnitData, U.size(), MaxMutationLen);
       assert(NewSize > 0 && NewSize <= MaxMutationLen);
       ExecuteCallback(CurrentUnitData, NewSize);
